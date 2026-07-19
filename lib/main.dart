@@ -1,33 +1,13 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-class CounterProvider extends ChangeNotifier {
-  int _count = 0;
-  int get count => _count;
+import 'firebase_options.dart';
 
-  void increment() {
-    _count++;
-    notifyListeners();
-  }
-
-  void decrement() {
-    _count--;
-    notifyListeners();
-  }
-
-  void reset() {
-    _count = 0;
-    notifyListeners();
-  }
-}
-
-void main() {
-  runApp(
-    ChangeNotifierProvider(
-      create: (context) => CounterProvider(),
-      child: const MyApp(),
-    ),
-  );
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -35,81 +15,92 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(home: CounterPage());
+    return MaterialApp(
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            return const HomePage();
+          }
+          return const LoginPage();
+        },
+      ),
+    );
   }
 }
 
-class CounterPage extends StatelessWidget {
-  const CounterPage({super.key});
+// Login Page
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  String _error = '';
+
+  Future<void> _login() async {
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _error = e.message ?? 'Login failed';
+      });
+    }
+  }
+
+  Future<void> _register() async {
+    try {
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _error = e.message ?? 'Registration failed';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Provider Counter'),
-        backgroundColor: Colors.blue,
-      ),
-      body: Center(
+      appBar: AppBar(title: const Text('Login'), backgroundColor: Colors.blue),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Count:', style: TextStyle(fontSize: 24)),
-            Consumer<CounterProvider>(
-              builder: (context, counter, child) {
-                return Text(
-                  '${counter.count}',
-                  style: TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: counter.count < 0 ? Colors.red : Colors.green,
-                  ),
-                );
-              },
+            TextField(
+              controller: _emailController,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+              ),
             ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: () {
-                    Provider.of<CounterProvider>(
-                      context,
-                      listen: false,
-                    ).decrement();
-                  },
-                  child: const Text('-'),
-                ),
-                const SizedBox(width: 20),
-                ElevatedButton(
-                  onPressed: () {
-                    Provider.of<CounterProvider>(
-                      context,
-                      listen: false,
-                    ).increment();
-                  },
-                  child: const Text('+'),
-                ),
-                const SizedBox(width: 20),
-                ElevatedButton(
-                  onPressed: () {
-                    Provider.of<CounterProvider>(
-                      context,
-                      listen: false,
-                    ).reset();
-                  },
-                  child: const Text('Reset'),
-                ),
-              ],
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SecondPage()),
-                );
-              },
-              child: const Text('Go to Second Page'),
+            const SizedBox(height: 8),
+            if (_error.isNotEmpty)
+              Text(_error, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: _login, child: const Text('Login')),
+            TextButton(
+              onPressed: _register,
+              child: const Text('Register instead'),
             ),
           ],
         ),
@@ -118,24 +109,33 @@ class CounterPage extends StatelessWidget {
   }
 }
 
-class SecondPage extends StatelessWidget {
-  const SecondPage({super.key});
+// Home Page (shown when logged in)
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Second Page'),
-        backgroundColor: Colors.green,
-      ),
+      appBar: AppBar(title: const Text('Home'), backgroundColor: Colors.blue),
       body: Center(
-        child: Consumer<CounterProvider>(
-          builder: (context, counter, child) {
-            return Text(
-              'Count from Provider: ${counter.count}',
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Welcome ${user?.email ?? 'User'}!',
               style: const TextStyle(fontSize: 24),
-            );
-          },
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                FirebaseAuth.instance.signOut();
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Sign Out'),
+            ),
+          ],
         ),
       ),
     );
