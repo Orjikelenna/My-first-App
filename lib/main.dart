@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
@@ -15,128 +15,93 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            return const HomePage();
-          }
-          return const LoginPage();
-        },
-      ),
-    );
+    return const MaterialApp(home: NotesPage());
   }
 }
 
-// Login Page
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class NotesPage extends StatefulWidget {
+  const NotesPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<NotesPage> createState() => _NotesPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  String _error = '';
+class _NotesPageState extends State<NotesPage> {
+  final TextEditingController _controller = TextEditingController();
+  final CollectionReference _notes = FirebaseFirestore.instance.collection(
+    'notes',
+  );
 
-  Future<void> _login() async {
-    try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        _error = e.message ?? 'Login failed';
+  // Add a note to Firestore
+  Future<void> _addNote() async {
+    if (_controller.text.isNotEmpty) {
+      await _notes.add({
+        'note': _controller.text,
+        'timestamp': FieldValue.serverTimestamp(),
       });
+      _controller.clear();
     }
   }
 
-  Future<void> _register() async {
-    try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
-    } on FirebaseAuthException catch (e) {
-      setState(() {
-        _error = e.message ?? 'Registration failed';
-      });
-    }
+  // Delete a note from Firestore
+  Future<void> _deleteNote(String id) async {
+    await _notes.doc(id).delete();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Login'), backgroundColor: Colors.blue),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (_error.isNotEmpty)
-              Text(_error, style: const TextStyle(color: Colors.red)),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: _login, child: const Text('Login')),
-            TextButton(
-              onPressed: _register,
-              child: const Text('Register instead'),
-            ),
-          ],
-        ),
+      appBar: AppBar(
+        title: const Text('My Notes'),
+        backgroundColor: Colors.blue,
       ),
-    );
-  }
-}
-
-// Home Page (shown when logged in)
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Home'), backgroundColor: Colors.blue),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Welcome ${user?.email ?? 'User'}!',
-              style: const TextStyle(fontSize: 24),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(
+                      labelText: 'Enter a note',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(onPressed: _addNote, child: const Text('Add')),
+              ],
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                FirebaseAuth.instance.signOut();
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _notes.orderBy('timestamp').snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Text('Something went wrong');
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const CircularProgressIndicator();
+                }
+                return ListView.builder(
+                  itemCount: snapshot.data!.docs.length,
+                  itemBuilder: (context, index) {
+                    final doc = snapshot.data!.docs[index];
+                    return ListTile(
+                      title: Text(doc['note']),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _deleteNote(doc.id),
+                      ),
+                    );
+                  },
+                );
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Sign Out'),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
