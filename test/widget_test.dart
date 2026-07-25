@@ -1,30 +1,66 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:my_first_app/main.dart';
+import 'package:my_first_app/models/todo.dart';
+import 'package:my_first_app/widgets/todo_tile.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Todo Model Tests', () {
+    test('Todo is created correctly', () {
+      final todo = Todo(id: '1', title: 'Buy groceries', isCompleted: false);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      expect(todo.id, equals('1'));
+      expect(todo.title, equals('Buy groceries'));
+      expect(todo.isCompleted, isFalse);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('Todo fromFirestore works correctly', () {
+      final data = {
+        'title': 'Learn Flutter',
+        'isCompleted': true,
+        'createdAt': null,
+      };
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+      final todo = Todo.fromFirestore(data, '123');
+
+      expect(todo.id, equals('123'));
+      expect(todo.title, equals('Learn Flutter'));
+      expect(todo.isCompleted, isTrue);
+    });
+
+    test('Todo title is not empty', () {
+      final todo = Todo(id: '1', title: 'Test todo', isCompleted: false);
+
+      expect(todo.title.isNotEmpty, isTrue);
+    });
+  });
+
+  group('TodoTile Widget Tests', () {
+    testWidgets('TodoTile displays todo title', (WidgetTester tester) async {
+      final todo = Todo(id: '1', title: 'Buy groceries', isCompleted: false);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TodoTile(todo: todo, onToggle: () {}, onDelete: () {}),
+          ),
+        ),
+      );
+
+      expect(find.text('Buy groceries'), findsOneWidget);
+    });
+
+    testWidgets('TodoTile shows checkbox', (WidgetTester tester) async {
+      final todo = Todo(id: '1', title: 'Test todo', isCompleted: false);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TodoTile(todo: todo, onToggle: () {}, onDelete: () {}),
+          ),
+        ),
+      );
+
+      expect(find.byType(Checkbox), findsOneWidget);
+    });
   });
 }
