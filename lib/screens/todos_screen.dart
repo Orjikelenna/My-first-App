@@ -4,6 +4,7 @@ import '../models/todo.dart';
 import '../services/auth_service.dart';
 import '../services/todo_service.dart';
 import '../widgets/todo_tile.dart';
+import 'payment_screen.dart';
 
 class TodosScreen extends StatefulWidget {
   const TodosScreen({super.key});
@@ -31,6 +32,15 @@ class _TodosScreenState extends State<TodosScreen> {
         title: const Text('My Todos'),
         backgroundColor: Colors.blue,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.payment),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const PaymentScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => _authService.signOut(),
