@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../services/auth_service.dart';
 import '../services/transaction_service.dart';
+import '../widgets/spending_chart.dart';
 import '../widgets/transaction_tile.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -192,6 +193,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
+            // Add this before Expanded
+            if (transactions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SpendingChart(transactions: transactions),
+              ),
             Expanded(
               child: transactions.isEmpty
                   ? const Center(
