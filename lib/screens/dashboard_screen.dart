@@ -193,7 +193,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
-            // Add this before Expanded
             if (transactions.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -227,22 +226,116 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildTransactionsTab() {
-    return StreamBuilder<List<FinanceTransaction>>(
-      stream: _transactionService.getTransactions(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final transactions = snapshot.data ?? [];
-        return ListView.builder(
-          itemCount: transactions.length,
-          itemBuilder: (context, index) {
-            return TransactionTile(
-              transaction: transactions[index],
-              onDelete: () =>
-                  _transactionService.deleteTransaction(transactions[index].id),
-            );
-          },
+    final TextEditingController searchController = TextEditingController();
+    String searchQuery = '';
+    String selectedFilter = 'All';
+
+    return StatefulBuilder(
+      builder: (context, setTabState) {
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: searchController,
+                    decoration: InputDecoration(
+                      labelText: 'Search transactions',
+                      prefixIcon: const Icon(Icons.search),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                searchController.clear();
+                                setTabState(() => searchQuery = '');
+                              },
+                            )
+                          : null,
+                    ),
+                    onChanged: (val) =>
+                        setTabState(() => searchQuery = val.toLowerCase()),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: ['All', 'Income', 'Expense'].map((filter) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(filter),
+                            selected: selectedFilter == filter,
+                            onSelected: (val) =>
+                                setTabState(() => selectedFilter = filter),
+                            selectedColor: Colors.deepPurple,
+                            labelStyle: TextStyle(
+                              color: selectedFilter == filter
+                                  ? Colors.white
+                                  : Colors.black,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: StreamBuilder<List<FinanceTransaction>>(
+                stream: _transactionService.getTransactions(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  var transactions = snapshot.data ?? [];
+
+                  if (searchQuery.isNotEmpty) {
+                    transactions = transactions
+                        .where(
+                          (t) =>
+                              t.title.toLowerCase().contains(searchQuery) ||
+                              t.category.toLowerCase().contains(searchQuery),
+                        )
+                        .toList();
+                  }
+
+                  if (selectedFilter == 'Income') {
+                    transactions = transactions
+                        .where((t) => t.isIncome)
+                        .toList();
+                  } else if (selectedFilter == 'Expense') {
+                    transactions = transactions
+                        .where((t) => !t.isIncome)
+                        .toList();
+                  }
+
+                  if (transactions.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'No transactions found',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    itemCount: transactions.length,
+                    itemBuilder: (context, index) {
+                      return TransactionTile(
+                        transaction: transactions[index],
+                        onDelete: () => _transactionService.deleteTransaction(
+                          transactions[index].id,
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         );
       },
     );
