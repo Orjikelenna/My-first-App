@@ -15,6 +15,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final TransactionService _transactionService = TransactionService();
   final AuthService _authService = AuthService();
+  int _currentIndex = 0;
 
   final List<String> _categories = [
     'Salary',
@@ -117,123 +118,197 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Finance Tracker'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
+  Widget _buildHomeTab() {
+    return StreamBuilder<List<FinanceTransaction>>(
+      stream: _transactionService.getTransactions(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Center(child: Text('Something went wrong'));
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final transactions = snapshot.data ?? [];
+        double totalIncome = transactions
+            .where((t) => t.isIncome)
+            .fold(0, (sum, t) => sum + t.amount);
+        double totalExpenses = transactions
+            .where((t) => !t.isIncome)
+            .fold(0, (sum, t) => sum + t.amount);
+        double balance = totalIncome - totalExpenses;
+
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.deepPurple.shade50,
+              child: Column(
+                children: [
+                  Text(
+                    'Balance',
+                    style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                  ),
+                  Text(
+                    '₦${balance.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      color: balance >= 0 ? Colors.green : Colors.red,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      Column(
+                        children: [
+                          const Icon(Icons.arrow_upward, color: Colors.green),
+                          const Text('Income'),
+                          Text(
+                            '₦${totalIncome.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        children: [
+                          const Icon(Icons.arrow_downward, color: Colors.red),
+                          const Text('Expenses'),
+                          Text(
+                            '₦${totalExpenses.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: transactions.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No transactions yet\nTap + to add one',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: transactions.length,
+                      itemBuilder: (context, index) {
+                        return TransactionTile(
+                          transaction: transactions[index],
+                          onDelete: () => _transactionService.deleteTransaction(
+                            transactions[index].id,
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTransactionsTab() {
+    return StreamBuilder<List<FinanceTransaction>>(
+      stream: _transactionService.getTransactions(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final transactions = snapshot.data ?? [];
+        return ListView.builder(
+          itemCount: transactions.length,
+          itemBuilder: (context, index) {
+            return TransactionTile(
+              transaction: transactions[index],
+              onDelete: () =>
+                  _transactionService.deleteTransaction(transactions[index].id),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildProfileTab() {
+    final user = _authService.currentUser;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircleAvatar(
+            radius: 50,
+            backgroundColor: Colors.deepPurple,
+            child: Icon(Icons.person, size: 50, color: Colors.white),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            user?.email ?? 'User',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 30),
+          ElevatedButton.icon(
             onPressed: () => _authService.signOut(),
+            icon: const Icon(Icons.logout),
+            label: const Text('Sign Out'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
           ),
         ],
       ),
-      body: StreamBuilder<List<FinanceTransaction>>(
-        stream: _transactionService.getTransactions(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const Center(child: Text('Something went wrong'));
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    );
+  }
 
-          final transactions = snapshot.data ?? [];
+  @override
+  Widget build(BuildContext context) {
+    final tabs = [_buildHomeTab(), _buildTransactionsTab(), _buildProfileTab()];
 
-          double totalIncome = transactions
-              .where((t) => t.isIncome)
-              .fold(0, (sum, t) => sum + t.amount);
-          double totalExpenses = transactions
-              .where((t) => !t.isIncome)
-              .fold(0, (sum, t) => sum + t.amount);
-          double balance = totalIncome - totalExpenses;
+    final appBarTitles = ['Finance Tracker', 'Transactions', 'Profile'];
 
-          return Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: Colors.deepPurple.shade50,
-                child: Column(
-                  children: [
-                    Text(
-                      'Balance',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    Text(
-                      '₦${balance.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: balance >= 0 ? Colors.green : Colors.red,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Column(
-                          children: [
-                            const Icon(Icons.arrow_upward, color: Colors.green),
-                            const Text('Income'),
-                            Text(
-                              '₦${totalIncome.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Column(
-                          children: [
-                            const Icon(Icons.arrow_downward, color: Colors.red),
-                            const Text('Expenses'),
-                            Text(
-                              '₦${totalExpenses.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: transactions.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No transactions yet\nTap + to add one',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: transactions.length,
-                        itemBuilder: (context, index) {
-                          return TransactionTile(
-                            transaction: transactions[index],
-                            onDelete: () => _transactionService
-                                .deleteTransaction(transactions[index].id),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          );
-        },
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(appBarTitles[_currentIndex]),
+        actions: [
+          if (_currentIndex == 0)
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: _showAddTransactionDialog,
+            ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddTransactionDialog,
-        child: const Icon(Icons.add),
+      body: tabs[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        selectedItemColor: Colors.deepPurple,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list),
+            label: 'Transactions',
+          ),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
       ),
+      floatingActionButton: _currentIndex == 0
+          ? FloatingActionButton(
+              onPressed: _showAddTransactionDialog,
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 }
