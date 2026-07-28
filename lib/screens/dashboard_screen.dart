@@ -17,6 +17,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final TransactionService _transactionService = TransactionService();
   final AuthService _authService = AuthService();
   int _currentIndex = 0;
+  double _budget = 0;
 
   final List<String> _categories = [
     'Salary',
@@ -343,32 +344,165 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildProfileTab() {
     final user = _authService.currentUser;
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircleAvatar(
-            radius: 50,
-            backgroundColor: Colors.deepPurple,
-            child: Icon(Icons.person, size: 50, color: Colors.white),
+    final TextEditingController budgetController = TextEditingController();
+
+    return StreamBuilder<List<FinanceTransaction>>(
+      stream: _transactionService.getTransactions(),
+      builder: (context, snapshot) {
+        final transactions = snapshot.data ?? [];
+        double totalExpenses = transactions
+            .where((t) => !t.isIncome)
+            .fold(0, (sum, t) => sum + t.amount);
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const CircleAvatar(
+                radius: 50,
+                backgroundColor: Colors.deepPurple,
+                child: Icon(Icons.person, size: 50, color: Colors.white),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                user?.email ?? 'User',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 30),
+              // Budget section
+              Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Monthly Budget',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _budget > 0
+                            ? '₦${_budget.toStringAsFixed(2)}'
+                            : 'No budget set',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: _budget > 0 ? Colors.deepPurple : Colors.grey,
+                        ),
+                      ),
+                      if (_budget > 0) ...[
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(
+                          value: (totalExpenses / _budget).clamp(0.0, 1.0),
+                          backgroundColor: Colors.grey.shade200,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            totalExpenses >= _budget
+                                ? Colors.red
+                                : totalExpenses >= _budget * 0.8
+                                ? Colors.orange
+                                : Colors.green,
+                          ),
+                          minHeight: 10,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '₦${totalExpenses.toStringAsFixed(2)} of ₦${_budget.toStringAsFixed(2)} spent',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (totalExpenses >= _budget * 0.8)
+                          Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: totalExpenses >= _budget
+                                  ? Colors.red.shade50
+                                  : Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.warning,
+                                  color: totalExpenses >= _budget
+                                      ? Colors.red
+                                      : Colors.orange,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  totalExpenses >= _budget
+                                      ? 'Budget exceeded!'
+                                      : 'Approaching budget limit!',
+                                  style: TextStyle(
+                                    color: totalExpenses >= _budget
+                                        ? Colors.red
+                                        : Colors.orange,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: budgetController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Set budget (₦)',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () {
+                              if (budgetController.text.isNotEmpty) {
+                                setState(() {
+                                  _budget = double.parse(budgetController.text);
+                                });
+                                budgetController.clear();
+                              }
+                            },
+                            child: const Text('Set'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () => _authService.signOut(),
+                icon: const Icon(Icons.logout),
+                label: const Text('Sign Out'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            user?.email ?? 'User',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 30),
-          ElevatedButton.icon(
-            onPressed: () => _authService.signOut(),
-            icon: const Icon(Icons.logout),
-            label: const Text('Sign Out'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
